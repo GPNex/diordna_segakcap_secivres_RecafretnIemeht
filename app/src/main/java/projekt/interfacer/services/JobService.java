@@ -160,8 +160,8 @@ public class JobService extends Service {
         if (!DEBUG) {
             return;
         }
-
-        Log.e(TAG, msg);
+        // More -Wall than -Werror like
+        Log.d(TAG, msg);
     }
 
     @Override
@@ -171,6 +171,9 @@ public class JobService extends Service {
         mWorker.start();
         mJobHandler = new JobHandler(mWorker.getLooper());
         mMainHandler = new MainHandler(Looper.getMainLooper());
+
+        // Needed here before any checks
+        IOUtils.createThemeDirIfNotExists();
     }
 
     @Override
@@ -220,7 +223,8 @@ public class JobService extends Service {
         } else if (TextUtils.equals(command, COMMAND_VALUE_RESTART_UI)) {
             jobs_to_add.add(new UiResetJob());
         } else if (TextUtils.equals(command, COMMAND_VALUE_RESTART_SERVICE)) {
-            jobs_to_add.add(new RestartServiceJob());
+            log("Restarting JobService...");
+            restartService();
         } else if (TextUtils.equals(command, COMMAND_VALUE_CONFIGURATION_SHIM)) {
             jobs_to_add.add(new LocaleChanger(getApplicationContext(), mMainHandler));
         } else if (TextUtils.equals(command, COMMAND_VALUE_BOOTANIMATION)) {
@@ -459,10 +463,10 @@ public class JobService extends Service {
         // Let system know it's time for a font change
         SystemProperties.set("sys.refresh_theme", "1");
         Typeface.recreateDefaults();
-        float fontSize = Float.valueOf(Settings.System.getString(
-                getContentResolver(), Settings.System.FONT_SCALE));
-        Settings.System.putString(getContentResolver(),
-                Settings.System.FONT_SCALE, String.valueOf(fontSize + 0.0000001));
+        float fontSize = Settings.System.getFloatForUser(getContentResolver(),
+                                 Settings.System.FONT_SCALE, 1.0f, UserHandle.USER_CURRENT);
+        Settings.System.putFloatForUser(getContentResolver(),
+                Settings.System.FONT_SCALE, (fontSize + 0.0000001f), UserHandle.USER_CURRENT);
     }
 
     private void applyThemedSounds(String pid, String zipFileName) {
@@ -598,7 +602,6 @@ public class JobService extends Service {
     }
 
     private void copyBootAnimation(String fileName) {
-        IOUtils.createThemeDirIfNotExists();
 
         try {
             clearBootAnimation();
@@ -838,17 +841,6 @@ public class JobService extends Service {
             Message message = mJobHandler.obtainMessage(JobHandler.MESSAGE_DEQUEUE,
                     UiResetJob.this);
             mJobHandler.sendMessage(message);
-        }
-    }
-
-    private class RestartServiceJob implements Runnable {
-        @Override
-        public void run() {
-            log("Restarting JobService...");
-            Message message = mJobHandler.obtainMessage(JobHandler.MESSAGE_DEQUEUE,
-                    RestartServiceJob.this);
-            mJobHandler.sendMessage(message);
-            restartService();
         }
     }
 
